@@ -1,0 +1,26 @@
+ARCH_RADIO_SOURCES += cc1120-tiva-arch.c 
+ARCH_RADIO_SOURCES += cc11xx.c
+PLATFORMAPPS += cc1120v
+
+CFLAGS += -I$(MIST)/platform/$(TARGET)
+
+ifdef LDSCRIPT
+LDFLAGS += -T $(LDSCRIPT)
+endif
+
+CLEAN += *.dk-tm4c129x-1120v symbols.c symbols.h
+
+vpath %.c $(MIST)/platform/ek-tm4c123gxl
+vpath %.h $(MIST)/platform/ek-tm4c123gxl
+vpath %.S $(MIST)/platform/ek-tm4c123gxl
+CFLAGS += -I $(MIST)/platform/ek-tm4c123gxl
+
+vpath %.c $(MIST)/platform/ek-tm4c123gxl/dev
+vpath %.h $(MIST)/platform/ek-tm4c123gxl/dev
+vpath %.S $(MIST)/platform/ek-tm4c123gxl/dev
+CFLAGS += -I $(MIST)/platform/ek-tm4c123gxl/dev
+
+include $(MIST)/platform/ek-tm4c123gxl/Makefile.ek-tm4c123gxl
+
+# contiki-$(TARGET).a: ${addprefix $(OBJECTDIR)/,symbols.o}
+#	$(AR) rcf $@ $^

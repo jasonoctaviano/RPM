@@ -1,0 +1,26 @@
+ARCH_RADIO_SOURCES += cc1120-tiva-arch.c 
+ARCH_RADIO_SOURCES += cc11xx.c
+PLATFORMAPPS += cc1120v ip64 ip64-webserver
+
+CFLAGS += -I$(MIST)/platform/$(TARGET)
+
+ifdef LDSCRIPT
+LDFLAGS += -T $(LDSCRIPT)
+endif
+
+CLEAN += *.ek-tm4c1294xl-1120v symbols.c symbols.h
+
+vpath %.c $(MIST)/platform/ek-tm4c1294xl
+vpath %.h $(MIST)/platform/ek-tm4c1294xl
+vpath %.S $(MIST)/platform/ek-tm4c1294xl
+CFLAGS += -I $(MIST)/platform/ek-tm4c1294xl
+
+vpath %.c $(MIST)/platform/ek-tm4c1294xl/dev
+vpath %.h $(MIST)/platform/ek-tm4c1294xl/dev
+vpath %.S $(MIST)/platform/ek-tm4c1294xl/dev
+CFLAGS += -I $(MIST)/platform/ek-tm4c1294xl/dev
+
+include $(MIST)/platform/ek-tm4c1294xl/Makefile.ek-tm4c1294xl
+
+# contiki-$(TARGET).a: ${addprefix $(OBJECTDIR)/,symbols.o}
+#	$(AR) rcf $@ $^

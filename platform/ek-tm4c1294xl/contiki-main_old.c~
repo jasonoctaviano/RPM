@@ -1,0 +1,254 @@
+/*
+ * Copyright (c) 2012, Texas Instruments Incorporated - http://www.ti.com/
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE
+ * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/**
+ * \addtogroup platform
+ * @{
+ *
+ * \defgroup dk-tm4c129x The DK-TM4C129X Development Kit platform
+ *
+ * The DK-TM4C129X is the latest product in the Tiva C kit family.
+ * @{
+ *
+ * \file
+ *   Main module for the dk-tm4c129x platform
+ */
+/*---------------------------------------------------------------------------*/
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdio.h>
+
+#include "contiki.h"
+#include "dev/leds.h"
+#include "sys/timer.h"
+
+#include "lpm.h"
+#include "dev/gpio.h"
+#include "dev/watchdog.h"
+#include "dev/serial-line.h"
+#include "dev/sys-ctrl.h"
+#include "dev/uart.h"
+#include "dev/spi.h"
+
+#include "net/mac/frame802154.h"
+#include "net/netstack.h"
+#include "net/rime.h"
+#include "sys/autostart.h"
+#include "sys/profile.h"
+
+#if CC11xx_CC1101 || CC11xx_CC1120
+#include "cc11xx.h"
+#endif /* CC11xx_CC1101 || CC11xx_CC1120 */
+
+
+#include "dev/button-sensor.h"
+
+#include "tivaware/inc/hw_memmap.h"
+#include "tivaware/driverlib/tm4c_gpio.h"
+#include "tivaware/driverlib/tm4c_sysctl.h"
+
+#include "cpu.h"
+/*---------------------------------------------------------------------------*/
+#if STARTUP_CONF_VERBOSE
+#define PRINTF(...) printf(__VA_ARGS__)
+#else
+#define PRINTF(...)
+#endif
+
+#if UART_CONF_ENABLE
+#define PUTS(s) puts(s)
+#else
+#define PUTS(s)
+#endif
+/*---------------------------------------------------------------------------*/
+uint32_t sys_clock = 0;
+uint32_t state = 0;
+
+static struct etimer et, et2;
+
+
+PROCESS(blink_process, "Blink process");
+AUTOSTART_PROCESSES(&blink_process);
+PROCESS_THREAD(blink_process, ev, data)
+{  
+  PROCESS_BEGIN();
+  
+  etimer_set(&et, CLOCK_SECOND);
+  
+  while(1) {
+    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
+    
+    switch(state)
+    {
+      case 0:
+        leds_off(LEDS_D12_GREEN);
+        leds_off(LEDS_D12_BLUE);
+        leds_on(LEDS_D12_RED);
+        state++;
+        break;
+        
+      case 1:
+        leds_off(LEDS_D12_RED);
+        leds_off(LEDS_D12_BLUE);
+        leds_on(LEDS_D12_GREEN);
+        state++;
+        break;
+        
+      case 2:
+        leds_off(LEDS_D12_RED);
+        leds_off(LEDS_D12_GREEN);
+        leds_on(LEDS_D12_BLUE);
+        state = 0;
+        break;
+    }
+    
+    etimer_reset(&et);
+/*For test*/
+    //spi_Tx_TestDebug(); 
+  //cc1120_arch_spi_rw_byte(0x99);
+  }
+  
+  PROCESS_END();
+}
+
+PROCESS(blink_process2, "Blink process 2");
+AUTOSTART_PROCESSES(&blink_process2);
+PROCESS_THREAD(blink_process2, ev, data)
+{  
+  PROCESS_BEGIN();
+  
+  etimer_set(&et2, CLOCK_SECOND / 8);
+  
+  while(1) {
+    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et2));
+    
+    leds_toggle(LEDS_D12_WHITE);
+    
+    etimer_reset(&et2);   
+  }
+  
+  PROCESS_END();
+}
+
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief Main routine for the dk-tm4c129xl platform
+ */
+int
+main(void)
+{
+  sys_clock = sys_ctrl_init();
+  clock_init();
+  rtimer_init();
+  lpm_init();
+  gpio_init();
+
+  leds_init();
+  
+  process_init();
+  
+  button_sensor_init();
+watchdog_init();
+watchdog_periodic();
+watchdog_start();
+  /*
+   * Character I/O Initialization.
+   * When the UART receives a character it will call serial_line_input_byte to
+   * notify the core. The same applies for the USB driver.
+   *
+   * If slip-arch is also linked in afterwards (e.g. if we are a border router)
+   * it will overwrite one of the two peripheral input callbacks. Characters
+   * received over the relevant peripheral will be handled by
+   * slip_input_byte instead
+   */
+#if UART_CONF_ENABLE
+  uart_init();
+  uart_set_input(serial_line_input_byte);
+#endif
+
+  //spi_init();
+cc1120_arch_init();
+cc1120_arch_spi_disable();
+cc1120_arch_spi_enable();
+cc1120_arch_interrupt_enable();
+  printf("SPI_CONF_ENABLE\n");
+
+  if((GPIOPinRead(GPIO_PORTD_BASE, GPIO_PIN_1)&GPIO_PIN_1)==GPIO_PIN_1)
+printf("GDIO_HIGH\n");
+  
+serial_line_init();
+
+  INTERRUPTS_ENABLE();
+
+  //NETSTACK_RADIO.init();
+  #if CC11xx_CC1101 || CC11xx_CC1120
+  printf("Starting up cc11xx radio at channel %d\n", RF_CHANNEL);
+  //cc11xx_channel_set(RF_CHANNEL);
+  #endif /* CC11xx_CC1101 || CC11xx_CC1120 */
+  //NETSTACK_RADIO.on();
+
+  PUTS(CONTIKI_VERSION_STRING);
+  PUTS(BOARD_STRING);
+
+  process_start(&etimer_process, NULL);
+  ctimer_init();
+
+  process_start(&sensors_process, NULL);
+
+  energest_init();
+  ENERGEST_ON(ENERGEST_TYPE_CPU);
+
+  process_start(&blink_process, NULL);
+  //process_start(&blink_process2, NULL);
+  
+  autostart_start(autostart_processes);
+
+  while(1) {
+    uint8_t r;
+    do {
+      /* Reset watchdog and handle polls and events */
+      //watchdog_periodic();
+      r = process_run();
+      
+    } while(r > 0);
+
+    /* We have serviced all pending events. Enter a Low-Power mode. */
+    ENERGEST_OFF(ENERGEST_TYPE_CPU);
+    lpm_enter();
+    ENERGEST_ON(ENERGEST_TYPE_CPU);
+  }
+}
+/*---------------------------------------------------------------------------*/
+
+/**
+ * @}
+ * @}
+ */

@@ -1,0 +1,1 @@
+ds18b20_src = ds18b20.c owlink.c ownet.c crcutil.c
